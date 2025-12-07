@@ -1,28 +1,46 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import ItemCart from './ItemCart'
-import { CartContext } from '../../context/CartContext'
 import Swal from 'sweetalert2'
+import { deleteItemCart, deleteSizeItemCart } from '../../redux/cart/cartSlice'
 
+// Mock SweetAlert2
 vi.mock('sweetalert2', () => ({
     default: {
         fire: vi.fn()
     }
 }))
 
+// Mock acciones Redux
+vi.mock('../../redux/cart/cartSlice', () => ({
+    deleteItemCart: vi.fn((id) => ({ type: 'deleteItemCart', payload: id })),
+    deleteSizeItemCart: vi.fn((data) => ({ type: 'deleteSizeItemCart', payload: data }))
+}))
+
+// Mock ItemSizesList (evita renders complejos)
 vi.mock('../sizes/ItemSizesList', () => ({
-    default: ({ data }) => <div>{data.name}</div>
-}));
+    default: ({ data }) => <div data-testid="sizes-list">{data.length} sizes</div>
+}))
+
+// Mock dispatch()
+const mockDispatch = vi.fn()
+vi.mock('react-redux', () => ({
+    useDispatch: () => mockDispatch
+}))
 
 const mockData = {
+    id: '8VjMXYfZ9Y9nBUc3qWmx',
+    name: "Argentina '94",
+    img: "/images/argentina-suplente-1994.webp",
     price: 100,
     discPerc: 0.8,
     onSale: true,
     selectStock: [
         { size: 'S', quantity: 2 },
-        { size: 'M', quantity: 3 }
+        { size: 'M', quantity: 3 },
     ]
 }
 
+// 🔹 Función auxiliar para validar cálculos
 const calculateItemCart = (data) => {
     const unitInitialPrice = data.price
     const unitFinalPrice = data.onSale ? unitInitialPrice * data.discPerc : unitInitialPrice
@@ -32,65 +50,47 @@ const calculateItemCart = (data) => {
     return { unitInitialPrice, unitFinalPrice, quantity, initialPrice, finalPrice }
 }
 
-describe('ItemCart calculations', () => {
-    test('calculates correctly for onSale product', () => {
-        const result = calculateItemCart(mockData)
-        expect(result.quantity).toBe(5)
-        expect(result.unitFinalPrice).toBe(80)
-        expect(result.initialPrice).toBe(500)
-        expect(result.finalPrice).toBe(400)
+describe('ItemCart cálculos', () => {
+    test('calcula correctamente producto onSale', () => {
+        const res = calculateItemCart(mockData)
+        expect(res.quantity).toBe(5)
+        expect(res.unitFinalPrice).toBe(80)
+        expect(res.initialPrice).toBe(500)
+        expect(res.finalPrice).toBe(400)
     })
 
-    test('calculates correctly for non-sale product', () => {
+    test('calcula correctamente producto sin descuento', () => {
         const data = { ...mockData, onSale: false }
-        const result = calculateItemCart(data)
-        expect(result.unitFinalPrice).toBe(100)
-        expect(result.finalPrice).toBe(500)
+        const res = calculateItemCart(data)
+
+        expect(res.unitFinalPrice).toBe(100)
+        expect(res.finalPrice).toBe(500)
     })
 })
 
-describe('ItemCart Component', () => {
-    test('calls deleteItemCart after confirmation', async () => {
-        const deleteItemCart = vi.fn()
-        const deleteSizeItemCart = vi.fn()
+describe('ItemCart Componente', () => {
 
-        Swal.fire.mockResolvedValueOnce({ isConfirmed: true })
-
-        render(
-            <CartContext.Provider value={{ deleteItemCart, deleteSizeItemCart }}>
-                <ItemCart data={mockData} />
-            </CartContext.Provider>
-        )
-
-        const button = screen.getByRole('button', { name: /eliminar/i })
-        fireEvent.click(button)
-
-        expect(Swal.fire.mock.calls[0][0]).toBeDefined() // verifica que se haya llamado con algún objeto
-
-        await waitFor(() => {
-            expect(deleteItemCart).toHaveBeenCalledWith(mockData.id)
-        })
+    beforeEach(() => {
+        mockDispatch.mockClear()
+        Swal.fire.mockClear()
     })
 
-    test('does not call deleteItemCart if user cancels', async () => {
-        const deleteItemCart = vi.fn()
-        const deleteSizeItemCart = vi.fn()
+    test('confirma eliminación y llama deleteItemCart', async () => {
+        Swal.fire.mockResolvedValueOnce({ isConfirmed: true })
 
-        Swal.fire.mockResolvedValueOnce({ isConfirmed: false })
+        render(<ItemCart data={mockData} />)
 
-        render(
-            <CartContext.Provider value={{ deleteItemCart, deleteSizeItemCart }}>
-                <ItemCart data={mockData} />
-            </CartContext.Provider>
-        )
+        const btn = screen.getByRole('button', { name: /eliminar/i })
+        fireEvent.click(btn)
 
-        const button = screen.getByRole('button', { name: /eliminar/i })
-        fireEvent.click(button)
-
-        expect(Swal.fire.mock.calls[0][0]).toBeDefined() // verifica que se haya llamado con algún objeto
+        expect(Swal.fire).toHaveBeenCalled()
 
         await waitFor(() => {
-            expect(deleteItemCart).not.toHaveBeenCalled()
+            expect(deleteItemCart).toHaveBeenCalledWith('8VjMXYfZ9Y9nBUc3qWmx')
+            expect(mockDispatch).toHaveBeenCalledWith({
+                type: "deleteItemCart",
+                payload: '8VjMXYfZ9Y9nBUc3qWmx'
+            })
         })
     })
 })

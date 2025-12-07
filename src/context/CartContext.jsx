@@ -1,3 +1,4 @@
+//archivo en desuso pero lo dejo de ejemplo
 import { createContext, useState } from "react";
 
 export const CartContext = createContext();

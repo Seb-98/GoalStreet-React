@@ -1,33 +1,48 @@
-import { render, screen } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
-import { CartContext } from '../../context/CartContext'
-import CartWidget from './CartWidget'
+import { render, screen } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
+import { Provider } from "react-redux";
+import CartWidget from "./CartWidget";
+import { configureStore } from "@reduxjs/toolkit";
+import cartReducer from "../../redux/cart/cartSlice";
 
-// 🔹 Creamos un contexto simulado con un valor de prueba
-const mockContextValue = {
-    cartCount: 5
-}
+const renderWithStore = (preloadedState) => {
+    const store = configureStore({
+        reducer: { cart: cartReducer },
+        preloadedState
+    });
 
-describe('CartWidget Component', () => {
-    test('renders cart icon, count and link', () => {
-        render(
-            <CartContext.Provider value={mockContextValue}>
-                <MemoryRouter>
-                    <CartWidget />
-                </MemoryRouter>
-            </CartContext.Provider>
-        )
+    return render(
+        <Provider store={store}>
+            <MemoryRouter>
+                <CartWidget />
+            </MemoryRouter>
+        </Provider>
+    );
+};
 
-        // 1️⃣ Verificar que el ícono está presente
-        const cartIcon = screen.getByTestId('cart-icon')
-        expect(cartIcon).toBeInTheDocument()
+describe("CartWidget Component", () => {
+    test("renders cart icon, count and link", () => {
+        const mockState = {
+            cart: {
+                items: [
+                    {
+                        id: "1",
+                        selectStock: [
+                            { quantity: 2, size: "M" },
+                            { quantity: 3, size: "L" }
+                        ]
+                    }
+                ]
+            }
+        };
 
-        // 2️⃣ Verificar que el número del carrito se muestra
-        const badge = screen.getByText('5')
-        expect(badge).toBeInTheDocument()
+        renderWithStore(mockState);
 
-        // 3️⃣ Verificar que el enlace apunta a /cart
-        const link = screen.getByRole('link')
-        expect(link).toHaveAttribute('href', '/cart')
-    })
-})
+        expect(screen.getByTestId("cart-icon")).toBeInTheDocument();
+
+        expect(screen.getByText("5")).toBeInTheDocument();
+
+        const link = screen.getByRole("link");
+        expect(link).toHaveAttribute("href", "/cart");
+    });
+});

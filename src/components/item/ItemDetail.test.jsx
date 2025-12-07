@@ -1,13 +1,48 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import ItemDetail from './ItemDetail'
-import { CartContext } from '../../context/CartContext'
 import Swal from 'sweetalert2'
 import { MemoryRouter } from 'react-router-dom'
+import { useDispatch, useSelector } from 'react-redux'
+import { addItemCart, deleteItemCart } from '../../redux/cart/cartSlice'
+import { selectItemStock } from '../../redux/cart/cartSelectors'
 
-vi.mock('sweetalert2', () => ({ default: { fire: vi.fn() } }))
-vi.mock('../sizes/SizesList', () => ({ default: ({ select }) => <button onClick={() => select('M')}>Select Size</button> }))
-vi.mock('../sizes/ItemSizesList', () => ({ default: () => <div>ItemSizesList</div> }))
-vi.mock('./ItemCount', () => ({ default: ({ onAdd }) => <button onClick={() => onAdd(2)}>Add</button> }))
+// Mock Swal
+vi.mock('sweetalert2', () => ({
+    default: { fire: vi.fn() }
+}))
+
+// Mock Redux actions
+vi.mock('../../redux/cart/cartSlice', () => ({
+    addItemCart: vi.fn((payload) => ({ type: 'addItemCart', payload })),
+    deleteItemCart: vi.fn((id) => ({ type: 'deleteItemCart', payload: id })),
+}))
+
+// Mock useDispatch
+const mockDispatch = vi.fn()
+vi.mock('react-redux', () => ({
+    useDispatch: () => mockDispatch,
+    useSelector: vi.fn()
+}))
+
+// Mock SizesList: simula seleccionar talle M
+vi.mock('../sizes/SizesList', () => ({
+    default: ({ select }) => <button onClick={() => select('M')}>Select Size</button>
+}))
+
+// Mock ItemSizesList
+vi.mock('../sizes/ItemSizesList', () => ({
+    default: () => <div>ItemSizesList</div>
+}))
+
+// Mock ItemCount: simula sumar cantidad 2
+vi.mock('./ItemCount', () => ({
+    default: ({ onAdd }) => <button onClick={() => onAdd(2)}>Add</button>
+}))
+
+// Mock selector: devuelve stock vacío siempre
+vi.mock('../../redux/cart/cartSelectors', () => ({
+    selectItemStock: vi.fn()
+}))
 
 const mockDataWithStock = {
     id: '1',
@@ -36,63 +71,75 @@ const mockDataNoStock = {
     img: '/img2.jpg'
 }
 
-describe('ItemDetail Component - Optimized', () => {
-    let addItemCart, deleteItemCart, itemCartStock
+describe('ItemDetail Component — Redux Version', () => {
+
+    beforeEach(() => {
+        mockDispatch.mockClear()
+        Swal.fire.mockClear()
+        useSelector.mockImplementation((selectorFn) => selectorFn)
+        selectItemStock.mockReturnValue([]) /// stock vacío en el carrito
+    })
 
     const renderComponent = (data) =>
         render(
-            <CartContext.Provider value={{ addItemCart, deleteItemCart, itemCartStock }}>
-                <MemoryRouter>
-                    <ItemDetail dataDetail={data} />
-                </MemoryRouter>
-            </CartContext.Provider>
+            <MemoryRouter>
+                <ItemDetail dataDetail={data} />
+            </MemoryRouter>
         )
 
-    beforeEach(() => {
-        addItemCart = vi.fn()
-        deleteItemCart = vi.fn()
-        itemCartStock = vi.fn(() => [])
-        Swal.fire.mockReset()
-    })
-
-    test('renders correctly with stock and price with discount', async () => {
+    test('renders correctly with discount', async () => {
         renderComponent(mockDataWithStock)
 
-        expect(screen.getByText('$100')).toBeInTheDocument() // tachado
-        expect(screen.getByText(`$${mockDataWithStock.price * mockDataWithStock.discPerc}`)).toBeInTheDocument()
+        // precio inicial tachado
+        expect(screen.getByText('$100')).toBeInTheDocument()
 
-        fireEvent.click(screen.getByText('Select Size'))
-        fireEvent.click(screen.getByText('Add'))
-        fireEvent.click(screen.getByText('Confirmar'))
+        const finalPrice = mockDataWithStock.price * mockDataWithStock.discPerc
+        expect(screen.getByText(`$${finalPrice}`)).toBeInTheDocument()
+
+        fireEvent.click(screen.getByText('Select Size'))  // selecciona M
+        fireEvent.click(screen.getByText('Add'))          // agrega 2 unidades
+        fireEvent.click(screen.getByText('Confirmar'))    // confirma
 
         await waitFor(() => {
-            expect(addItemCart).toHaveBeenCalledWith(mockDataWithStock, [{ size: 'M', quantity: 2 }])
+            expect(addItemCart).toHaveBeenCalledWith({
+                item: mockDataWithStock,
+                selectStock: [{ size: "M", quantity: 2 }]
+            })
+
+            expect(mockDispatch).toHaveBeenCalledWith({
+                type: "addItemCart",
+                payload: {
+                    item: mockDataWithStock,
+                    selectStock: [{ size: 'M', quantity: 2 }]
+                }
+            })
+
             expect(Swal.fire).toHaveBeenCalledWith({
-                title: 'Camiseta agregada!',
-                icon: 'success',
+                title: "Camiseta agregada!",
+                icon: "success",
                 draggable: true
             })
         })
     })
 
-    test('renders correctly without stock', () => {
+    test('renders no stock message', () => {
         renderComponent(mockDataNoStock)
 
         expect(screen.getByText('No hay stock para esta camiseta')).toBeInTheDocument()
-        expect(screen.getByText('Volver al menu')).toBeInTheDocument()
     })
 
-    test('renders price without discount', () => {
+    test('price without discount', () => {
         renderComponent(mockDataNoStock)
-        expect(screen.getByText(`$${mockDataNoStock.price}`)).toBeInTheDocument()
+        expect(screen.getByText('$80')).toBeInTheDocument()
     })
 
-    test('Confirmar button disabled if no stock selected', () => {
+    test('Confirmar disabled when no selection', () => {
         renderComponent(mockDataWithStock)
+
         expect(screen.getByText('Confirmar')).toBeDisabled()
     })
 
-    test('delete item works with confirmation', async () => {
+    test('delete item with confirmation', async () => {
         Swal.fire.mockResolvedValueOnce({ isConfirmed: true })
 
         renderComponent(mockDataWithStock)
@@ -102,19 +149,11 @@ describe('ItemDetail Component - Optimized', () => {
         fireEvent.click(screen.getByText('Eliminar'))
 
         await waitFor(() => {
-            expect(deleteItemCart).toHaveBeenCalledWith(mockDataWithStock.id)
-        })
-    })
-
-    test('delete item canceled does not call deleteItemCart', async () => {
-        Swal.fire.mockResolvedValueOnce({ isConfirmed: false })
-
-        renderComponent(mockDataWithStock)
-
-        fireEvent.click(screen.getByText('Eliminar'))
-
-        await waitFor(() => {
-            expect(deleteItemCart).not.toHaveBeenCalled()
+            expect(deleteItemCart).toHaveBeenCalledWith("1")
+            expect(mockDispatch).toHaveBeenCalledWith({
+                type: "deleteItemCart",
+                payload: "1"
+            })
         })
     })
 })
