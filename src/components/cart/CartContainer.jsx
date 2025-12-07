@@ -3,12 +3,12 @@ import ItemCartList from "./ItemCartList";
 import SectionButtonsCart from "./SectionButtonsCart";
 import EmptyCart from "./EmptyCart";
 import { useDispatch, useSelector } from 'react-redux'
-import { selectCart, selectTotalCart } from "../../redux/cart/cartSelectors";
+import { selectCartItems, selectTotalCart } from "../../redux/cart/cartSelectors";
 import { deleteCart } from '../../redux/cart/cartSlice';
 
 const CartContainer = () => {
     const dispatch = useDispatch();
-    const cart = useSelector(selectCart);
+    const cart = useSelector(selectCartItems);
     const totalCart = useSelector(selectTotalCart)
 
     if (cart.length === 0) {

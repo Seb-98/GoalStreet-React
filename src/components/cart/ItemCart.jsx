@@ -1,20 +1,20 @@
 import { Row, Col, Button, Image } from "react-bootstrap";
 import ItemSizesList from "../sizes/ItemSizesList";
-import { CartContext } from "../../context/CartContext";
-import { useContext } from 'react'
 import Swal from 'sweetalert2'
 import { motion } from 'framer-motion';
+import { useDispatch } from 'react-redux';
+import { deleteItemCart, deleteSizeItemCart } from '../../redux/cart/cartSlice';
 
 const ItemCart = ({ data }) => {
+    const dispatch = useDispatch();
     const unitInitialPrice = data.price;
     const unitFinalPrice = data.onSale ? unitInitialPrice * data.discPerc : unitInitialPrice;
     const quantity = data.selectStock.reduce((acumulador, elem) => acumulador + elem.quantity, 0);
     const initialPrice = data.price * quantity;
     const finalPrice = data.onSale ? initialPrice * data.discPerc : initialPrice;
-    const { deleteSizeItemCart, deleteItemCart } = useContext(CartContext)
 
     const onDeleteSize = (sizeStock) => {
-        deleteSizeItemCart(data.id, sizeStock)
+        dispatch(deleteSizeItemCart({ id: data.id, size: sizeStock }));
     }
 
     const onDelete = (id) => {
@@ -24,7 +24,7 @@ const ItemCart = ({ data }) => {
             confirmButtonText: "Eliminar",
         }).then((result) => {
             if (result.isConfirmed) {
-                deleteItemCart(id);
+                dispatch(deleteItemCart(id));
             }
         });
     };

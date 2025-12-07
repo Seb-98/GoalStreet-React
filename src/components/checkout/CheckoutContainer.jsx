@@ -1,6 +1,5 @@
-import { useState, useContext } from "react";
+import { useState } from "react";
 import { Form, Row, Container, Col } from "react-bootstrap";
-import { CartContext } from "../../context/CartContext";
 import { endCheckout, validateClient, updateStock } from "../../service/checkoutService";
 import SectionCartCheckout from "./SectionCartCheckout";
 import SectionConfirmCheckout from "./SectionConfirmCheckout";
@@ -9,12 +8,18 @@ import { useForm } from "react-hook-form";
 import Swal from 'sweetalert2';
 import SuccessCheckout from "./SuccessCheckout";
 import { useNavigate } from "react-router-dom";
+import { useDispatch, useSelector } from 'react-redux';
+import { deleteCart } from '../../redux/cart/cartSlice';
+import { selectCart, selectCartSummary, selectResumeCart } from "../../redux/cart/cartSelectors";
 
 const CheckoutContainer = () => {
+    const dispatch = useDispatch();
     const { register, handleSubmit, formState: { errors } } = useForm()
     const navigate = useNavigate();
     const [idTransaction, setIdTransaction] = useState(null)
-    const { cart, resumeCart, clearCart, cartSummary } = useContext(CartContext)
+    const cart = useSelector(selectCart);
+    const resumeCart = useSelector(selectResumeCart)
+    const cartSummary = useSelector(selectCartSummary)
 
     const startCheckout = async (data) => {
 
@@ -38,7 +43,7 @@ const CheckoutContainer = () => {
             return;
         }
 
-        const validateEndCheckout = await endCheckout(resumeCart(), cartSummary.totalPay, resultValidateClient.id)
+        const validateEndCheckout = await endCheckout(resumeCart, cartSummary.totalPay, resultValidateClient.id)
 
         if (!validateEndCheckout) {
             Swal.close();
@@ -50,8 +55,8 @@ const CheckoutContainer = () => {
             return;
         }
         else {
-            await updateStock(resumeCart());
-            clearCart();
+            await updateStock(resumeCart);
+            dispatch(deleteCart())
             Swal.close();
             setIdTransaction(validateEndCheckout.id)
         }
@@ -64,7 +69,7 @@ const CheckoutContainer = () => {
             confirmButtonText: "Eliminar",
         }).then((result) => {
             if (result.isConfirmed) {
-                clearCart();
+                dispatch(deleteCart())
                 navigate("/");
             }
         });
